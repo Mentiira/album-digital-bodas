@@ -50,9 +50,19 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
     if (loading) return <div className="loading-screen">Cargando...</div>;
     if (!alias) return <GuestAccess />;
 
+    // Lógica de Ranking de Invitados (Incentivar participación)
+    const sortedUsers = [...users].sort((a, b) => {
+        const countA = photos.filter(p => p.userId === a.id).length;
+        const countB = photos.filter(p => p.userId === b.id).length;
+        return countB - countA;
+    });
+
+    const top3 = sortedUsers.slice(0, 3);
+    const restOfGuests = sortedUsers.slice(3, 50);
+
     return (
         <div className="app-container">
-            {/* 1. VISOR MODAL (REFINE: Fondo transparente, blur, botones invertidos) */}
+            {/* 1. VISOR MODAL */}
             {selected && (
                 <div className="viewer-fixed" style={{ background: 'rgba(255, 255, 255, 0.7)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', display: 'flex', flexDirection: 'column' }}>
                     <div className="viewer-header" style={{ padding: '25px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -88,7 +98,7 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                 </div>
             </div>
 
-            {/* 3. NAVEGACIÓN (STICKY) */}
+            {/* 3. NAVEGACIÓN */}
             <div className="tab-nav-wrapper shadow-sm">
                 <div className="tabs-row">
                     <button className={`t-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}><ImageIcon size={20} /> <span>Álbum</span></button>
@@ -112,59 +122,61 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                                 </div>
                             ))}
                         </div>
-
                         {photos.length > visibleCount && (
-                            <button
-                                onClick={() => setVisibleCount(prev => prev + 12)}
-                                style={{ width: '100%', padding: 18, marginTop: 20, borderRadius: 15, border: '1px solid #e0e0e0', background: '#fff', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#222', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-                            >
-                                <Plus size={18} /> {t('loadMore')}
-                            </button>
+                            <button onClick={() => setVisibleCount(prev => prev + 12)} style={{ width: '100%', padding: 18, marginTop: 20, borderRadius: 15, border: '1px solid #e0e0e0', background: '#fff', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#222', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}><Plus size={18} /> {t('loadMore')}</button>
                         )}
                     </div>
                 )}
 
                 {activeTab === 'chat' && <ChatView eventId={params.eventId} />}
 
-                {activeTab === 'itinerary' && (
-                    <div style={{ padding: 30 }}>
-                        <h2 className="serif" style={{ textAlign: 'center', marginBottom: 25 }}>{t('itinerary')}</h2>
-                        <div style={{ borderLeft: '2px solid #f0f0f0', marginLeft: 15, paddingLeft: 25 }}>
-                            <div style={{ position: 'relative', marginBottom: 25 }}><div style={{ position: 'absolute', left: -31, top: 6, width: 12, height: 12, background: '#2d3436', borderRadius: 6, border: '2px solid white', boxShadow: '0 0 0 2px #f0f0f0' }} /><span style={{ fontSize: 13, fontWeight: 'bold', color: '#fab1a0' }}>17:00</span><h4 style={{ margin: '4px 0', fontSize: '1.1rem' }}>{t('ceremony')}</h4><p style={{ fontSize: 14, color: '#888' }}>{t('ceremonyVenue')}</p></div>
-                            <div style={{ position: 'relative', marginBottom: 25 }}><div style={{ position: 'absolute', left: -31, top: 6, width: 12, height: 12, background: '#2d3436', borderRadius: 6, border: '2px solid white', boxShadow: '0 0 0 2px #f0f0f0' }} /><span style={{ fontSize: 13, fontWeight: 'bold', color: '#fab1a0' }}>19:00</span><h4 style={{ margin: '4px 0', fontSize: '1.1rem' }}>{t('reception')}</h4><p style={{ fontSize: 14, color: '#888' }}>{t('receptionVenue')}</p></div>
-                        </div>
-                    </div>
-                )}
-
                 {activeTab === 'guests' && (
                     <div style={{ padding: 20 }}>
                         <h2 className="serif" style={{ textAlign: 'center', marginBottom: 25 }}>{t('guests')}</h2>
 
-                        {/* TOP 3 INVITADOS (PODIO) */}
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 12, marginBottom: 45, padding: '0 10px' }}>
-                            {(() => {
-                                const sorted = [...users].sort((a, b) => photos.filter(p => p.userId === b.id).length - photos.filter(p => p.userId === a.id).length);
-                                const top3 = sorted.slice(0, 3);
-                                return (
-                                    <>
-                                        {/* Plata (2ndo) */}
-                                        {top3[1] && <div style={{ textAlign: 'center' }}><div style={{ position: 'relative' }}><div style={{ width: 55, height: 55, borderRadius: 30, background: '#dfe6e9', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '2px solid #b2bec3' }}><span>{top3[1].alias?.[0].toUpperCase()}</span></div><div style={{ position: 'absolute', top: -5, right: -5, background: '#b2bec3', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>2</div></div><p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#636e72', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top3[1].alias}</p></div>}
-
-                                        {/* Oro (1ero) */}
-                                        {top3[0] && <div style={{ textAlign: 'center', transform: 'translateY(-15px)' }}><div style={{ position: 'relative' }}><Crown style={{ position: 'absolute', top: -22, left: 0, right: 0, margin: 'auto', color: '#f1c40f' }} size={26} fill="#f1c40f" /><div style={{ width: 80, height: 80, borderRadius: 40, background: '#ffeaa7', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '3px solid #fdcb6e', fontSize: '1.5rem', boxShadow: '0 10px 20px rgba(253, 203, 110, 0.2)' }}><span>{top3[0].alias?.[0].toUpperCase()}</span></div><div style={{ position: 'absolute', top: -8, right: -8, background: '#fdcb6e', color: 'white', width: 30, height: 30, borderRadius: 15, fontSize: 13, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}><Trophy size={18} /></div></div><p style={{ fontSize: 14, marginTop: 10, fontWeight: 'bold', color: '#2d3436', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top3[0].alias}</p></div>}
-
-                                        {/* Bronce (3ero) */}
-                                        {top3[2] && <div style={{ textAlign: 'center' }}><div style={{ position: 'relative' }}><div style={{ width: 55, height: 55, borderRadius: 30, background: '#fab1a0', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '2px solid #e17055' }}><span>{top3[2].alias?.[0].toUpperCase()}</span></div><div style={{ position: 'absolute', top: -5, right: -5, background: '#e17055', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>3</div></div><p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#d63031', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top3[2].alias}</p></div>}
-                                    </>
-                                );
-                            })()}
+                        {/* PODIO VISUAL */}
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 12, marginBottom: 45 }}>
+                            {/* Plata */}
+                            {top3[1] && (
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ width: 55, height: 55, borderRadius: 30, background: '#dfe6e9', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '2px solid #b2bec3' }}><span>{top3[1].alias?.[0].toUpperCase()}</span></div>
+                                        <div style={{ position: 'absolute', top: -5, right: -5, background: '#b2bec3', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>2</div>
+                                    </div>
+                                    <p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#636e72' }}>{top3[1].alias}</p>
+                                </div>
+                            )}
+                            {/* Oro */}
+                            {top3[0] && (
+                                <div style={{ textAlign: 'center', transform: 'translateY(-15px)' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <Crown style={{ position: 'absolute', top: -22, left: 0, right: 0, margin: 'auto', color: '#f1c40f' }} size={26} fill="#f1c40f" />
+                                        <div style={{ width: 80, height: 80, borderRadius: 40, background: '#ffeaa7', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '3px solid #fdcb6e', fontSize: '1.5rem' }}><span>{top3[0].alias?.[0].toUpperCase()}</span></div>
+                                        <div style={{ position: 'absolute', top: -8, right: -8, background: '#fdcb6e', color: 'white', width: 30, height: 30, borderRadius: 15, fontSize: 13, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}><Trophy size={18} /></div>
+                                    </div>
+                                    <p style={{ fontSize: 14, marginTop: 10, fontWeight: 'bold', color: '#2d3436' }}>{top3[0].alias}</p>
+                                </div>
+                            )}
+                            {/* Bronce */}
+                            {top3[2] && (
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ width: 55, height: 55, borderRadius: 30, background: '#fab1a0', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '2px solid #e17055' }}><span>{top3[2].alias?.[0].toUpperCase()}</span></div>
+                                        <div style={{ position: 'absolute', top: -5, right: -5, background: '#e17055', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>3</div>
+                                    </div>
+                                    <p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#d63031' }}>{top3[2].alias}</p>
+                                </div>
+                            )}
                         </div>
 
-                        <div className="guest-list-v2">
-                            {users.map(u => (
-                                <div key={u.id} className="g-card" style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 18, background: '#fcfcfc', borderRadius: 20, marginBottom: 12, border: '1px solid #f0f0f0', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
-                                    <div className="g-avatar" style={{ width: 50, height: 50, borderRadius: 25, background: '#2d3436', color: 'white', display: 'grid', placeItems: 'center', fontWeight: 'bold', fontSize: '1.1rem' }}>{u.alias?.[0]?.toUpperCase()}</div>
-                                    <div style={{ flex: 1 }}><h4 style={{ margin: 0, fontSize: '1rem' }}>{u.alias}</h4><p style={{ margin: 0, fontSize: 13, color: '#888', marginTop: 2 }}>{photos.filter(p => p.userId === u.id).length} {t('photosShort')}</p></div>
+                        {/* LISTA ORDENADA (Ranking Completo) */}
+                        <div style={{ marginTop: 20 }}>
+                            {sortedUsers.slice(0, 15).map((u, index) => (
+                                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 15, background: '#fcfcfc', borderRadius: 20, marginBottom: 12, border: '1px solid #f0f0f0', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
+                                    <div style={{ width: 25, fontSize: 13, fontWeight: 'bold', color: index < 3 ? '#2d3436' : '#aaa' }}>{index + 1}</div>
+                                    <div style={{ width: 45, height: 45, borderRadius: 25, background: index === 0 ? '#ffeaa7' : index === 1 ? '#dfe6e9' : index === 2 ? '#fab1a0' : '#2d3436', color: index < 3 ? '#2d3436' : 'white', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: index < 3 ? '2px solid' : 'none', borderColor: index === 0 ? '#fdcb6e' : index === 1 ? '#b2bec3' : '#e17055' }}>{u.alias?.[0]?.toUpperCase()}</div>
+                                    <div style={{ flex: 1 }}><h4 style={{ margin: 0, fontSize: '0.95rem' }}>{u.alias}</h4></div>
+                                    <div style={{ background: '#f1f3f5', padding: '4px 12px', borderRadius: 15, fontSize: 12, fontWeight: 'bold', color: '#666' }}>{photos.filter(p => p.userId === u.id).length} {t('photosShort')}</div>
                                 </div>
                             ))}
                         </div>
@@ -205,8 +217,6 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                 .serif { font-family: 'Playfair Display', serif; }
                 .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
                 .t-item span { font-size: 10px; font-weight: 700; margin-top: 2px; }
-                .vid-card { position: relative; background: #000; border-radius: 15px; display: grid; place-items: center; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-                .photo-card { position: relative; border-radius: 15px; background-size: cover; background-position: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
             `}</style>
         </div>
     );

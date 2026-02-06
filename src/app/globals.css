@@ -105,6 +105,19 @@ body {
   z-index: 10000 !important;
 }
 
+/* TOASTS MÁS GRANDES */
+[data-sonner-toast] {
+  padding: 16px 20px !important;
+  font-size: 1.1rem !important;
+  border-radius: 15px !important;
+  width: auto !important;
+  min-width: 250px !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-weight: 600 !important;
+}
+
 /* GRID FIX */
 .photo-grid {
   display: grid;
