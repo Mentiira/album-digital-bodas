@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
+const s3 = new S3Client({
+    region: 'auto',
+    endpoint: process.env.R2_ENDPOINT,
+    credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    },
+});
+
+const LIMITS = {
+    photo: 2000,
+    video: 200
+};
+
+export async function POST(req: NextRequest) {
+    try {
+        const { filename, contentType, eventId, type = 'photo' } = await req.json();
+
+        if (!filename || !contentType || !eventId) {
+            return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+        }
+
+        // --- SEGURIDAD: Verificar límites en Firestore ---
+        const eventRef = doc(db, 'events', eventId);
+        const eventSnap = await getDoc(eventRef);
+
+        if (eventSnap.exists()) {
+            const data = eventSnap.data();
+            const currentCount = type === 'video' ? (data.videoCount || 0) : (data.photoCount || 0);
+            const maxLimit = type === 'video' ? LIMITS.video : LIMITS.photo;
+
+            if (currentCount >= maxLimit) {
+                return NextResponse.json({
+                    error: 'Limit reached',
+                    message: `Has alcanzado el límite de ${maxLimit} ${type === 'video' ? 'videos' : 'fotos'} para este evento.`
+                }, { status: 403 });
+            }
+        }
+
+        const key = `events/${eventId}/photos/${Date.now()}-${filename}`;
+
+        const command = new PutObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: key,
+            ContentType: contentType,
+        });
+
+        const signedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+
+        return NextResponse.json({ url: signedUrl, key });
+    } catch (error) {
+        console.error('R2 Error:', error);
+        return NextResponse.json({ error: 'Failed to generate signed URL' }, { status: 500 });
+    }
+}
