@@ -8,15 +8,16 @@ import LanguageSelector from '@/components/LanguageSelector';
 import UploadFab from '@/components/UploadFab';
 import ChatView from '@/components/ChatView';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { Image as ImageIcon, MessageSquare, Calendar, Users, User, X, Download, Play, ChevronLeft, Bell, Trophy, Crown, Plus } from 'lucide-react';
+import { doc, deleteDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { Image as ImageIcon, MessageSquare, Calendar, Users, User, X, Download, Play, ChevronLeft, Bell, Trophy, Crown, Plus, Trash2, Loader2, Archive } from 'lucide-react';
 import { use } from 'react';
+import { toast } from 'sonner';
 
 type Tab = 'home' | 'chat' | 'itinerary' | 'guests' | 'profile';
 
 export default function EventPage({ params: paramsPromise }: { params: Promise<{ eventId: string }> }) {
     const params = use(paramsPromise);
-    const { user, alias, loading } = useAuth();
+    const { user, alias, isAdmin, loading } = useAuth();
     const { t } = useLanguage();
 
     const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -24,9 +25,15 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
     const [users, setUsers] = useState<any[]>([]);
     const [selected, setSelected] = useState<any | null>(null);
     const [visibleCount, setVisibleCount] = useState(12);
+    const [deleting, setDeleting] = useState(false);
+    const [downloadingZip, setDownloadingZip] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     useEffect(() => {
-        if (!params.eventId) return;
+        // IMPORTANTE: Solo activar los listeners cuando el usuario esté autenticado (auth != null)
+        // para evitar errores de permisos al inicio.
+        if (!params.eventId || !user) return;
+
         const qPhotos = query(collection(db, `events/${params.eventId}/photos`), orderBy('createdAt', 'desc'));
         const unsubP = onSnapshot(qPhotos, s => setPhotos(s.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
@@ -34,31 +41,68 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
         const unsubU = onSnapshot(qUsers, s => setUsers(s.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
         return () => { unsubP(); unsubU(); };
-    }, [params.eventId]);
+    }, [params.eventId, user]);
 
-    const handleDownload = (url: string) => {
+    const handleDownload = (url: string, type: 'photo' | 'video' = 'photo') => {
+        const extension = type === 'video' ? 'mp4' : 'webp';
+        const filename = `recuerdo-${Date.now()}.${extension}`;
+        const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+
+        // Creamos un link invisible pero apuntando a nuestra propia API
         const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.setAttribute('download', 'boda-recuerdo.webp');
+        link.href = downloadUrl;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
+    const handleDeletePhoto = async () => {
+        if (!selected) return;
+        setDeleting(true);
+        try {
+            await deleteDoc(doc(db, `events/${params.eventId}/photos`, selected.id));
+            setSelected(null);
+            setShowDeleteModal(false);
+            toast.success('Eliminado correctamente');
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al eliminar');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const handleDownloadAll = async () => {
+        setDownloadingZip(true);
+        try {
+            const downloadUrl = `/api/download-all?eventId=${params.eventId}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al generar ZIP');
+        } finally {
+            setDownloadingZip(false);
+        }
+    };
+
     if (loading) return <div className="loading-screen">Cargando...</div>;
     if (!alias) return <GuestAccess />;
 
-    // Lógica de Ranking de Invitados (Incentivar participación)
-    const sortedUsers = [...users].sort((a, b) => {
+    // Lógica de Ranking de Invitados (Solo los que han subido algo en ESTE evento)
+    const eventUsers = users.filter(u => photos.some(p => p.userId === u.id));
+
+    const sortedUsers = [...eventUsers].sort((a, b) => {
         const countA = photos.filter(p => p.userId === a.id).length;
         const countB = photos.filter(p => p.userId === b.id).length;
         return countB - countA;
     });
 
     const top3 = sortedUsers.slice(0, 3);
-    const restOfGuests = sortedUsers.slice(3, 50);
+    const restOfGuests = sortedUsers.slice(3, 13); // Mostrar hasta 10 invitados adicionales (del 4 al 13)
 
     return (
         <div className="app-container">
@@ -66,7 +110,14 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
             {selected && (
                 <div className="viewer-fixed" style={{ background: 'rgba(255, 255, 255, 0.7)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', display: 'flex', flexDirection: 'column' }}>
                     <div className="viewer-header" style={{ padding: '25px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <button onClick={() => handleDownload(selected.url)} style={{ background: 'none', border: 'none', color: '#2d3436', cursor: 'pointer' }}><Download size={28} /></button>
+                        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                            <button onClick={() => handleDownload(selected.url, selected.type)} style={{ background: 'none', border: 'none', color: '#2d3436', cursor: 'pointer' }}><Download size={28} /></button>
+                            {selected.userId === user?.uid && (
+                                <button onClick={() => setShowDeleteModal(true)} disabled={deleting} style={{ background: 'none', border: 'none', color: '#ff7675', cursor: 'pointer' }}>
+                                    <Trash2 size={24} />
+                                </button>
+                            )}
+                        </div>
                         <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#2d3436', cursor: 'pointer' }}><X size={40} /></button>
                     </div>
                     <div className="viewer-body" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px' }}>
@@ -93,7 +144,9 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                     <div style={{ marginTop: 'auto', textAlign: 'center', paddingBottom: 10 }}>
                         <h1 className="serif" style={{ margin: 0, fontSize: '2rem' }}>{t('eventTitle')}</h1>
                         <p style={{ fontSize: 14, color: '#444', margin: '6px 0' }}>{t('eventDate')}</p>
-                        <div style={{ display: 'inline-block', background: '#fff9db', color: '#f08c00', padding: '4px 14px', borderRadius: 20, fontSize: 11, border: '1px solid #ffe066', fontWeight: '600' }}>{t('anonymousMode')}</div>
+                        <div style={{ display: 'inline-block', background: '#f8f9fa', color: '#2d3436', padding: '6px 16px', borderRadius: 20, fontSize: 12, border: '1px solid #e9ecef', fontWeight: '600' }}>
+                            <span style={{ opacity: 0.7 }}>Invitado:</span> {alias}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -117,8 +170,21 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                         <div className="photo-grid">
                             {photos.slice(0, visibleCount).map(p => (
                                 <div key={p.id} onClick={() => setSelected(p)} className={p.type === 'video' ? 'vid-card' : 'photo-card'} style={p.type === 'video' ? {} : { backgroundImage: `url(${p.url})` }}>
-                                    {p.type === 'video' && <Play fill="white" size={24} />}
-                                    <div style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.3)', color: 'white', padding: '2px 8px', borderRadius: 8, fontSize: 10 }}>{p.userName}</div>
+                                    {p.type === 'video' && (
+                                        <>
+                                            <video
+                                                src={p.url + "#t=0.5"}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                                                muted
+                                                playsInline
+                                                preload="metadata"
+                                            />
+                                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.1)', display: 'grid', placeItems: 'center' }}>
+                                                <Play fill="white" size={24} />
+                                            </div>
+                                        </>
+                                    )}
+                                    <div style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.3)', color: 'white', padding: '2px 8px', borderRadius: 8, fontSize: 10, zIndex: 2 }}>{p.userName}</div>
                                 </div>
                             ))}
                         </div>
@@ -130,53 +196,49 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
 
                 {activeTab === 'chat' && <ChatView eventId={params.eventId} />}
 
+                {activeTab === 'itinerary' && (
+                    <div style={{ padding: 30 }}>
+                        <h2 className="serif" style={{ textAlign: 'center', marginBottom: 25 }}>{t('itinerary')}</h2>
+                        <div style={{ borderLeft: '2px solid #f0f0f0', marginLeft: 15, paddingLeft: 25 }}>
+                            <div style={{ position: 'relative', marginBottom: 25 }}>
+                                <div style={{ position: 'absolute', left: -31, top: 6, width: 12, height: 12, background: '#2d3436', borderRadius: 6, border: '2px solid white', boxShadow: '0 0 0 2px #f0f0f0' }} />
+                                <span style={{ fontSize: 13, fontWeight: 'bold', color: '#fab1a0' }}>17:00</span>
+                                <h4 style={{ margin: '4px 0', fontSize: '1.1rem' }}>Ceremonia</h4>
+                                <p style={{ fontSize: 14, color: '#888' }}>Catedral de Tlalnepantla</p>
+                            </div>
+                            <div style={{ position: 'relative', marginBottom: 25 }}>
+                                <div style={{ position: 'absolute', left: -31, top: 6, width: 12, height: 12, background: '#2d3436', borderRadius: 6, border: '2px solid white', boxShadow: '0 0 0 2px #f0f0f0' }} />
+                                <span style={{ fontSize: 13, fontWeight: 'bold', color: '#fab1a0' }}>19:00</span>
+                                <h4 style={{ margin: '4px 0', fontSize: '1.1rem' }}>Recepción</h4>
+                                <p style={{ fontSize: 14, color: '#888' }}>Salón El Ranchito</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'guests' && (
                     <div style={{ padding: 20 }}>
                         <h2 className="serif" style={{ textAlign: 'center', marginBottom: 25 }}>{t('guests')}</h2>
 
-                        {/* PODIO VISUAL */}
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 12, marginBottom: 45 }}>
-                            {/* Plata */}
-                            {top3[1] && (
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ position: 'relative' }}>
-                                        <div style={{ width: 55, height: 55, borderRadius: 30, background: '#dfe6e9', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '2px solid #b2bec3' }}><span>{top3[1].alias?.[0].toUpperCase()}</span></div>
-                                        <div style={{ position: 'absolute', top: -5, right: -5, background: '#b2bec3', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>2</div>
-                                    </div>
-                                    <p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#636e72' }}>{top3[1].alias}</p>
-                                </div>
-                            )}
-                            {/* Oro */}
-                            {top3[0] && (
-                                <div style={{ textAlign: 'center', transform: 'translateY(-15px)' }}>
-                                    <div style={{ position: 'relative' }}>
-                                        <Crown style={{ position: 'absolute', top: -22, left: 0, right: 0, margin: 'auto', color: '#f1c40f' }} size={26} fill="#f1c40f" />
-                                        <div style={{ width: 80, height: 80, borderRadius: 40, background: '#ffeaa7', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '3px solid #fdcb6e', fontSize: '1.5rem' }}><span>{top3[0].alias?.[0].toUpperCase()}</span></div>
-                                        <div style={{ position: 'absolute', top: -8, right: -8, background: '#fdcb6e', color: 'white', width: 30, height: 30, borderRadius: 15, fontSize: 13, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}><Trophy size={18} /></div>
-                                    </div>
-                                    <p style={{ fontSize: 14, marginTop: 10, fontWeight: 'bold', color: '#2d3436' }}>{top3[0].alias}</p>
-                                </div>
-                            )}
-                            {/* Bronce */}
-                            {top3[2] && (
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ position: 'relative' }}>
-                                        <div style={{ width: 55, height: 55, borderRadius: 30, background: '#fab1a0', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: '2px solid #e17055' }}><span>{top3[2].alias?.[0].toUpperCase()}</span></div>
-                                        <div style={{ position: 'absolute', top: -5, right: -5, background: '#e17055', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>3</div>
-                                    </div>
-                                    <p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#d63031' }}>{top3[2].alias}</p>
-                                </div>
-                            )}
+                        {/* PODIO VISUAL (Top 3) */}
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 12, marginBottom: 45, padding: '0 10px' }}>
+                            {/* Plata (2ndo) */}
+                            {top3[1] && <div style={{ textAlign: 'center' }}><div style={{ position: 'relative' }}><div style={{ width: 55, height: 55, borderRadius: 30, background: '#dfe6e9', display: 'grid', placeItems: 'center', fontWeight: 'bold', borderWidth: '2px', borderStyle: 'solid', borderColor: '#b2bec3' }}><span>{top3[1].alias?.[0].toUpperCase()}</span></div><div style={{ position: 'absolute', top: -5, right: -5, background: '#b2bec3', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>2</div></div><p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#636e72', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top3[1].alias}</p></div>}
+
+                            {/* Oro (1ero) */}
+                            {top3[0] && <div style={{ textAlign: 'center', transform: 'translateY(-15px)' }}><div style={{ position: 'relative' }}><Crown style={{ position: 'absolute', top: -22, left: 0, right: 0, margin: 'auto', color: '#f1c40f' }} size={26} fill="#f1c40f" /><div style={{ width: 80, height: 80, borderRadius: 40, background: '#ffeaa7', display: 'grid', placeItems: 'center', fontWeight: 'bold', borderWidth: '3px', borderStyle: 'solid', borderColor: '#fdcb6e', fontSize: '1.5rem', boxShadow: '0 10px 20px rgba(253, 203, 110, 0.2)' }}><span>{top3[0].alias?.[0].toUpperCase()}</span></div><div style={{ position: 'absolute', top: -8, right: -8, background: '#fdcb6e', color: 'white', width: 30, height: 30, borderRadius: 15, fontSize: 13, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}><Trophy size={18} /></div></div><p style={{ fontSize: 14, marginTop: 10, fontWeight: 'bold', color: '#2d3436', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top3[0].alias}</p></div>}
+
+                            {/* Bronce (3ero) */}
+                            {top3[2] && <div style={{ textAlign: 'center' }}><div style={{ position: 'relative' }}><div style={{ width: 55, height: 55, borderRadius: 30, background: '#fab1a0', display: 'grid', placeItems: 'center', fontWeight: 'bold', borderWidth: '2px', borderStyle: 'solid', borderColor: '#e17055' }}><span>{top3[2].alias?.[0].toUpperCase()}</span></div><div style={{ position: 'absolute', top: -5, right: -5, background: '#e17055', color: 'white', width: 22, height: 22, borderRadius: 11, fontSize: 10, display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>3</div></div><p style={{ fontSize: 11, marginTop: 8, fontWeight: 'bold', color: '#d63031', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top3[2].alias}</p></div>}
                         </div>
 
-                        {/* LISTA ORDENADA (Ranking Completo) */}
-                        <div style={{ marginTop: 20 }}>
-                            {sortedUsers.slice(0, 15).map((u, index) => (
-                                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 15, background: '#fcfcfc', borderRadius: 20, marginBottom: 12, border: '1px solid #f0f0f0', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
-                                    <div style={{ width: 25, fontSize: 13, fontWeight: 'bold', color: index < 3 ? '#2d3436' : '#aaa' }}>{index + 1}</div>
-                                    <div style={{ width: 45, height: 45, borderRadius: 25, background: index === 0 ? '#ffeaa7' : index === 1 ? '#dfe6e9' : index === 2 ? '#fab1a0' : '#2d3436', color: index < 3 ? '#2d3436' : 'white', display: 'grid', placeItems: 'center', fontWeight: 'bold', border: index < 3 ? '2px solid' : 'none', borderColor: index === 0 ? '#fdcb6e' : index === 1 ? '#b2bec3' : '#e17055' }}>{u.alias?.[0]?.toUpperCase()}</div>
-                                    <div style={{ flex: 1 }}><h4 style={{ margin: 0, fontSize: '0.95rem' }}>{u.alias}</h4></div>
-                                    <div style={{ background: '#f1f3f5', padding: '4px 12px', borderRadius: 15, fontSize: 12, fontWeight: 'bold', color: '#666' }}>{photos.filter(p => p.userId === u.id).length} {t('photosShort')}</div>
+                        {/* LISTA DE SIGUIENTES (Ranking 4-13) */}
+                        <div className="guest-list-v2">
+                            {restOfGuests.map((u, index) => (
+                                <div key={u.id} className="g-card" style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 18, background: '#fcfcfc', borderRadius: 20, marginBottom: 12, border: '1px solid #f0f0f0', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
+                                    <div style={{ fontSize: 14, fontWeight: 'bold', color: '#aaa', width: 20 }}>{index + 4}</div>
+                                    <div className="g-avatar" style={{ width: 45, height: 45, borderRadius: 25, background: '#2d3436', color: 'white', display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>{u.alias?.[0]?.toUpperCase()}</div>
+                                    <div style={{ flex: 1 }}><h4 style={{ margin: 0, fontSize: '1rem' }}>{u.alias}</h4><p style={{ margin: 0, fontSize: 13, color: '#888', marginTop: 2 }}>{photos.filter(p => p.userId === u.id).length} {t('photosShort')}</p></div>
                                 </div>
                             ))}
                         </div>
@@ -188,18 +250,45 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                         <div style={{ padding: '50px 20px', textAlign: 'center', background: '#fcfcfc', borderBottom: '1px solid #f0f0f0' }}>
                             <div style={{ width: 90, height: 90, borderRadius: 45, background: '#2d3436', color: 'white', display: 'grid', placeItems: 'center', fontSize: 35, margin: '0 auto 20px', fontFamily: 'serif', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>{alias?.[0].toUpperCase()}</div>
                             <h1 className="serif" style={{ margin: 0, fontSize: '1.8rem' }}>{alias}</h1>
-                            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'center', gap: 30 }}>
-                                <div style={{ textAlign: 'center' }}>
-                                    <strong style={{ display: 'block', fontSize: 24, color: '#2d3436' }}>{photos.filter(p => p.userId === user?.uid).length}</strong>
-                                    <span style={{ fontSize: 13, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>{t('photosUploaded')}</span>
+                            <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+                                <div style={{ display: 'flex', gap: 30 }}>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <strong style={{ display: 'block', fontSize: 24, color: '#2d3436' }}>{photos.filter(p => p.userId === user?.uid).length}</strong>
+                                        <span style={{ fontSize: 13, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>{t('photosUploaded')}</span>
+                                    </div>
                                 </div>
+                                {isAdmin && (
+                                    <button
+                                        onClick={handleDownloadAll}
+                                        disabled={downloadingZip}
+                                        style={{ background: '#2d3436', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 30, display: 'flex', alignItems: 'center', gap: 10, fontWeight: 'bold', fontSize: 14, boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }}
+                                    >
+                                        {downloadingZip ? <Loader2 className="animate-spin" size={18} /> : <Archive size={18} />}
+                                        {t('downloadAll')}
+                                    </button>
+                                )}
                             </div>
                         </div>
                         <div style={{ padding: 25 }}>
                             <h3 className="serif" style={{ marginBottom: 20 }}>{t('myPhotos')}</h3>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                                 {photos.filter(p => p.userId === user?.uid).map(p => (
-                                    <div key={p.id} onClick={() => setSelected(p)} style={{ aspectRatio: 1, borderRadius: 15, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#f1f3f5', backgroundImage: p.type === 'video' ? '' : `url(${p.url})`, display: 'grid', placeItems: 'center', position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>{p.type === 'video' && <Play size={18} fill="black" />}</div>
+                                    <div key={p.id} onClick={() => setSelected(p)} style={{ aspectRatio: 1, borderRadius: 15, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#f1f3f5', backgroundImage: p.type === 'video' ? '' : `url(${p.url})`, display: 'grid', placeItems: 'center', position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+                                        {p.type === 'video' && (
+                                            <>
+                                                <video
+                                                    src={p.url + "#t=0.5"}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                                                    muted
+                                                    playsInline
+                                                    preload="metadata"
+                                                />
+                                                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.1)', display: 'grid', placeItems: 'center' }}>
+                                                    <Play size={18} fill="white" color="white" />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                             {photos.filter(p => p.userId === user?.uid).length === 0 && <p style={{ textAlign: 'center', color: '#bbb', padding: '50px 0' }}>{t('noPhotosProfile')}</p>}
@@ -213,10 +302,70 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                 <UploadFab eventId={params.eventId} />
             )}
 
+            {/* 6. MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+            {showDeleteModal && (
+                <div className="confirm-modal-overlay">
+                    <div className="confirm-modal-card">
+                        <div style={{ marginBottom: 20, color: '#ff7675' }}>
+                            <Trash2 size={48} />
+                        </div>
+                        <h3 className="serif" style={{ fontSize: '1.4rem', marginBottom: 10 }}>¿Eliminar recuerdo?</h3>
+                        <p style={{ color: '#636e72', fontSize: 14, lineHeight: 1.6, marginBottom: 30 }}>Esta acción no se puede deshacer. El video o foto desaparecerá del álbum para siempre.</p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+                            <button
+                                onClick={handleDeletePhoto}
+                                disabled={deleting}
+                                style={{ background: '#ff7675', color: 'white', border: 'none', padding: '16px', borderRadius: 15, fontWeight: 'bold', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+                            >
+                                {deleting ? <Loader2 className="animate-spin" size={18} /> : null}
+                                {deleting ? 'Eliminando...' : 'Sí, eliminar permanentemente'}
+                            </button>
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={deleting}
+                                style={{ background: '#f1f2f6', color: '#2d3436', border: 'none', padding: '16px', borderRadius: 15, fontWeight: 'bold', fontSize: 15 }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style jsx>{`
                 .serif { font-family: 'Playfair Display', serif; }
                 .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
                 .t-item span { font-size: 10px; font-weight: 700; margin-top: 2px; }
+                .vid-card { position: relative; background: #000; border-radius: 15px; display: grid; place-items: center; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                .photo-card { position: relative; border-radius: 15px; background-size: cover; background-position: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                
+                .confirm-modal-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0,0,0,0.4);
+                    backdrop-filter: blur(5px);
+                    z-index: 1000000;
+                    display: grid;
+                    place-items: center;
+                    padding: 20px;
+                }
+                .confirm-modal-card {
+                    background: white;
+                    width: 100%;
+                    max-width: 340px;
+                    border-radius: 30px;
+                    padding: 35px 25px;
+                    text-align: center;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+                    animation: modalIn 0.3s ease-out;
+                }
+                @keyframes modalIn {
+                    from { transform: scale(0.9); opacity: 0; }
+                    to { transform: scale(1); opacity: 1; }
+                }
+                .animate-spin { animation: spin 1s linear infinite; }
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
             `}</style>
         </div>
     );

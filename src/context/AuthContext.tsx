@@ -8,6 +8,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 interface AuthContextType {
     user: User | null;
     alias: string;
+    isAdmin: boolean;
     setAlias: (name: string) => Promise<void>;
     loading: boolean;
 }
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [alias, setAliasState] = useState<string>('');
+    const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -27,14 +29,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const savedAlias = localStorage.getItem('userAlias');
                 if (savedAlias) {
                     setAliasState(savedAlias);
-                } else {
-                    // Fallback to Firestore
-                    const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                    if (userDoc.exists()) {
-                        const data = userDoc.data();
-                        setAliasState(data.alias || '');
-                        localStorage.setItem('userAlias', data.alias || '');
-                    }
+                }
+
+                // Fetch latest data from Firestore for role/isAdmin
+                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    setAliasState(data.alias || '');
+                    localStorage.setItem('userAlias', data.alias || '');
+                    setIsAdmin(data.role === 'admin');
                 }
             } else {
                 // Automatically sign in anonymously if no user
@@ -63,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, alias, setAlias, loading }}>
+        <AuthContext.Provider value={{ user, alias, isAdmin, setAlias, loading }}>
             {children}
         </AuthContext.Provider>
     );
