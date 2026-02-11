@@ -126,7 +126,7 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                     onClick={() => galleryInputRef.current?.click()}
                     disabled={uploading}
                 >
-                    <Upload size={20} />
+                    <Upload size={28} />
                 </button>
 
                 <button
@@ -166,17 +166,17 @@ export default function UploadFab({ eventId }: { eventId: string }) {
           box-shadow: 0 15px 35px rgba(0,0,0,0.2);
         }
         .fab-mini {
-          width: 50px;
-          height: 50px;
+          width: 65px;
+          height: 65px;
           border-radius: 50%;
-          background: white;
-          color: #2d3436;
-          border: 1px solid #eee;
+          background: #2d3436;
+          color: white;
+          border: none;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+          box-shadow: 0 15px 35px rgba(0,0,0,0.15);
         }
         .animate-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

@@ -9,7 +9,8 @@ interface AuthContextType {
     user: User | null;
     alias: string;
     isAdmin: boolean;
-    setAlias: (name: string) => Promise<void>;
+    setAlias: (name: string, eventId: string) => Promise<void>;
+    setIsAdmin: (val: boolean) => void;
     loading: boolean;
 }
 
@@ -25,20 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 setUser(currentUser);
-                // Try to load alias from localStorage first
-                const savedAlias = localStorage.getItem('userAlias');
-                if (savedAlias) {
-                    setAliasState(savedAlias);
-                }
-
-                // Fetch latest data from Firestore for role/isAdmin
-                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    setAliasState(data.alias || '');
-                    localStorage.setItem('userAlias', data.alias || '');
-                    setIsAdmin(data.role === 'admin');
-                }
+                // La lógica de isAdmin y alias ahora se maneja por evento en la página
             } else {
                 // Automatically sign in anonymously if no user
                 try {
@@ -53,12 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => unsubscribe();
     }, []);
 
-    const setAlias = async (name: string) => {
+    const setAlias = async (name: string, eventId: string) => {
         if (!user) return;
         setAliasState(name);
-        localStorage.setItem('userAlias', name);
-        // Persist to Firestore
-        await setDoc(doc(db, 'users', user.uid), {
+        localStorage.setItem(`userAlias_${eventId}`, name);
+        // Persistencia dentro del EVENTO (Nueva Lógica)
+        await setDoc(doc(db, 'events', eventId, 'guests', user.uid), {
             uid: user.uid,
             alias: name,
             updatedAt: serverTimestamp()
@@ -66,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, alias, isAdmin, setAlias, loading }}>
+        <AuthContext.Provider value={{ user, alias, isAdmin, setAlias, setIsAdmin, loading }}>
             {children}
         </AuthContext.Provider>
     );

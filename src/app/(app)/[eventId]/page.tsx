@@ -13,11 +13,11 @@ import { Image as ImageIcon, MessageSquare, Calendar, Users, User, X, Download, 
 import { use } from 'react';
 import { toast } from 'sonner';
 
-type Tab = 'home' | 'chat' | 'itinerary' | 'guests' | 'profile';
+type Tab = 'home' | 'chat' | 'guests' | 'profile';
 
 export default function EventPage({ params: paramsPromise }: { params: Promise<{ eventId: string }> }) {
     const params = use(paramsPromise);
-    const { user, alias, isAdmin, loading } = useAuth();
+    const { user, alias, isAdmin, setIsAdmin, loading } = useAuth();
     const { t } = useLanguage();
 
     const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -28,20 +28,43 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
     const [deleting, setDeleting] = useState(false);
     const [downloadingZip, setDownloadingZip] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [eventData, setEventData] = useState<any>(null);
+    const [eventLoading, setEventLoading] = useState(true);
 
     useEffect(() => {
-        // IMPORTANTE: Solo activar los listeners cuando el usuario esté autenticado (auth != null)
-        // para evitar errores de permisos al inicio.
         if (!params.eventId || !user) return;
+
+        // La validación del alias ahora es reactiva en el render
+
+        // Cargar Datos del Evento
+        const unsubE = onSnapshot(doc(db, 'events', params.eventId), (doc) => {
+            if (doc.exists()) {
+                setEventData(doc.data());
+            }
+            setEventLoading(false);
+        });
 
         const qPhotos = query(collection(db, `events/${params.eventId}/photos`), orderBy('createdAt', 'desc'));
         const unsubP = onSnapshot(qPhotos, s => setPhotos(s.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
-        const qUsers = query(collection(db, 'users'), orderBy('updatedAt', 'desc'));
-        const unsubU = onSnapshot(qUsers, s => setUsers(s.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        // Cargar Invitados Específicos de este evento
+        const qGuests = query(collection(db, `events/${params.eventId}/guests`), orderBy('updatedAt', 'desc'));
+        const unsubU = onSnapshot(qGuests, s => {
+            const guestsList = s.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setUsers(guestsList);
 
-        return () => { unsubP(); unsubU(); };
-    }, [params.eventId, user]);
+            // Verificar si el usuario actual es ADMIN en ESTE evento
+            const currentUserInEvent = guestsList.find(g => g.id === user.uid);
+            if (currentUserInEvent) {
+                // @ts-ignore
+                setIsAdmin(currentUserInEvent.role === 'admin');
+            } else {
+                setIsAdmin(false);
+            }
+        });
+
+        return () => { unsubE(); unsubP(); unsubU(); };
+    }, [params.eventId, user, setIsAdmin]);
 
     const handleDownload = (url: string, type: 'photo' | 'video' = 'photo') => {
         const extension = type === 'video' ? 'mp4' : 'webp';
@@ -89,8 +112,13 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
         }
     };
 
-    if (loading) return <div className="loading-screen">Cargando...</div>;
-    if (!alias) return <GuestAccess />;
+    if (loading || eventLoading) return <div className="loading-screen">Cargando...</div>;
+    if (!eventData) return <div className="loading-screen"><h3>Evento no encontrado</h3><p>Por favor verifica el link.</p></div>;
+
+    // Alias reactivo: buscamos en el estado global o en el almacenamiento local de este evento
+    const eventAlias = alias || (typeof window !== 'undefined' ? localStorage.getItem(`userAlias_${params.eventId}`) : null);
+
+    if (!eventAlias) return <GuestAccess eventId={params.eventId} />;
 
     // Lógica de Ranking de Invitados (Solo los que han subido algo en ESTE evento)
     const eventUsers = users.filter(u => photos.some(p => p.userId === u.id));
@@ -112,7 +140,7 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                     <div className="viewer-header" style={{ padding: '25px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
                             <button onClick={() => handleDownload(selected.url, selected.type)} style={{ background: 'none', border: 'none', color: '#2d3436', cursor: 'pointer' }}><Download size={28} /></button>
-                            {selected.userId === user?.uid && (
+                            {(selected.userId === user?.uid || isAdmin) && (
                                 <button onClick={() => setShowDeleteModal(true)} disabled={deleting} style={{ background: 'none', border: 'none', color: '#ff7675', cursor: 'pointer' }}>
                                     <Trash2 size={24} />
                                 </button>
@@ -136,34 +164,49 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
             {/* 2. HERO */}
             <div style={{ height: '35vh', position: 'relative', overflow: 'hidden' }}>
                 <div style={{ position: 'absolute', inset: 0, background: "url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80') center/cover" }} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.4), white)', display: 'flex', flexDirection: 'column', padding: 20 }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', padding: 25 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <LanguageSelector />
-                        <button style={{ width: 40, height: 40, borderRadius: '50%', background: 'white', border: 'none', display: 'grid', placeItems: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}><Bell size={18} /></button>
+                        <button style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', display: 'grid', placeItems: 'center' }}><Bell size={18} /></button>
                     </div>
-                    <div style={{ marginTop: 'auto', textAlign: 'center', paddingBottom: 10 }}>
-                        <h1 className="serif" style={{ margin: 0, fontSize: '2rem' }}>{t('eventTitle')}</h1>
-                        <p style={{ fontSize: 14, color: '#444', margin: '6px 0' }}>{t('eventDate')}</p>
-                        <div style={{ display: 'inline-block', background: '#f8f9fa', color: '#2d3436', padding: '6px 16px', borderRadius: 20, fontSize: 12, border: '1px solid #e9ecef', fontWeight: '600' }}>
-                            <span style={{ opacity: 0.7 }}>Invitado:</span> {alias}
+                    <div style={{ marginTop: 'auto', textAlign: 'center', paddingBottom: 15 }}>
+                        <h1 className="serif" style={{ margin: 0, fontSize: '2.2rem', color: 'white', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+                            {eventData.title || 'Nuestra Boda'}
+                        </h1>
+                        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', margin: '8px 0', fontWeight: '400', letterSpacing: 1 }}>
+                            {eventData.date || 'Próximamente'}
+                        </p>
+                        <div style={{ display: 'inline-block', background: 'rgba(184, 134, 11, 0.25)', backdropFilter: 'blur(10px)', color: 'white', padding: '8px 20px', borderRadius: 25, fontSize: 12, border: '1px solid rgba(184, 134, 11, 0.4)', fontWeight: '500', marginTop: 12 }}>
+                            <span style={{ opacity: 0.9 }}>{t('weddingOf') === 'Boda de' ? 'Invitado' : 'Guest'}:</span> {eventAlias}
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* 3. NAVEGACIÓN */}
-            <div className="tab-nav-wrapper shadow-sm">
+            <div className="tab-nav-wrapper" style={{ background: '#F8F7F2', borderBottom: '1px solid #EFECE5' }}>
                 <div className="tabs-row">
-                    <button className={`t-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}><ImageIcon size={20} /> <span>Álbum</span></button>
-                    <button className={`t-item ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}><MessageSquare size={20} /> <span>Chat</span></button>
-                    <button className={`t-item ${activeTab === 'itinerary' ? 'active' : ''}`} onClick={() => setActiveTab('itinerary')}><Calendar size={20} /> <span>Agenda</span></button>
-                    <button className={`t-item ${activeTab === 'guests' ? 'active' : ''}`} onClick={() => setActiveTab('guests')}><Users size={20} /> <span>Invitados</span></button>
-                    <button className={`t-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}><User size={20} /> <span>Perfil</span></button>
+                    <button className={`t-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+                        <ImageIcon size={26} color={activeTab === 'home' ? '#B8860B' : '#8E8E8E'} />
+                        <span style={{ color: activeTab === 'home' ? '#B8860B' : '#8E8E8E', fontWeight: activeTab === 'home' ? '600' : '400' }}>{t('album')}</span>
+                    </button>
+                    <button className={`t-item ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+                        <MessageSquare size={26} color={activeTab === 'chat' ? '#B8860B' : '#8E8E8E'} />
+                        <span style={{ color: activeTab === 'chat' ? '#B8860B' : '#8E8E8E', fontWeight: activeTab === 'chat' ? '600' : '400' }}>{t('chat')}</span>
+                    </button>
+                    <button className={`t-item ${activeTab === 'guests' ? 'active' : ''}`} onClick={() => setActiveTab('guests')}>
+                        <Users size={26} color={activeTab === 'guests' ? '#B8860B' : '#8E8E8E'} />
+                        <span style={{ color: activeTab === 'guests' ? '#B8860B' : '#8E8E8E', fontWeight: activeTab === 'guests' ? '600' : '400' }}>{t('guests')}</span>
+                    </button>
+                    <button className={`t-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+                        <User size={26} color={activeTab === 'profile' ? '#B8860B' : '#8E8E8E'} />
+                        <span style={{ color: activeTab === 'profile' ? '#B8860B' : '#8E8E8E', fontWeight: activeTab === 'profile' ? '600' : '400' }}>{t('profile')}</span>
+                    </button>
                 </div>
             </div>
 
             {/* 4. CONTENIDO */}
-            <div className="tab-content" style={{ background: 'white' }}>
+            <div className="tab-content" style={{ background: '#F8F7F2', minHeight: '65vh' }}>
                 {activeTab === 'home' && (
                     <div style={{ padding: 15 }}>
                         <h3 className="serif" style={{ marginBottom: 15 }}>{t('liveGallery')}</h3>
@@ -196,25 +239,6 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
 
                 {activeTab === 'chat' && <ChatView eventId={params.eventId} />}
 
-                {activeTab === 'itinerary' && (
-                    <div style={{ padding: 30 }}>
-                        <h2 className="serif" style={{ textAlign: 'center', marginBottom: 25 }}>{t('itinerary')}</h2>
-                        <div style={{ borderLeft: '2px solid #f0f0f0', marginLeft: 15, paddingLeft: 25 }}>
-                            <div style={{ position: 'relative', marginBottom: 25 }}>
-                                <div style={{ position: 'absolute', left: -31, top: 6, width: 12, height: 12, background: '#2d3436', borderRadius: 6, border: '2px solid white', boxShadow: '0 0 0 2px #f0f0f0' }} />
-                                <span style={{ fontSize: 13, fontWeight: 'bold', color: '#fab1a0' }}>17:00</span>
-                                <h4 style={{ margin: '4px 0', fontSize: '1.1rem' }}>Ceremonia</h4>
-                                <p style={{ fontSize: 14, color: '#888' }}>Catedral de Tlalnepantla</p>
-                            </div>
-                            <div style={{ position: 'relative', marginBottom: 25 }}>
-                                <div style={{ position: 'absolute', left: -31, top: 6, width: 12, height: 12, background: '#2d3436', borderRadius: 6, border: '2px solid white', boxShadow: '0 0 0 2px #f0f0f0' }} />
-                                <span style={{ fontSize: 13, fontWeight: 'bold', color: '#fab1a0' }}>19:00</span>
-                                <h4 style={{ margin: '4px 0', fontSize: '1.1rem' }}>Recepción</h4>
-                                <p style={{ fontSize: 14, color: '#888' }}>Salón El Ranchito</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {activeTab === 'guests' && (
                     <div style={{ padding: 20 }}>
@@ -235,7 +259,7 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                         {/* LISTA DE SIGUIENTES (Ranking 4-13) */}
                         <div className="guest-list-v2">
                             {restOfGuests.map((u, index) => (
-                                <div key={u.id} className="g-card" style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 18, background: '#fcfcfc', borderRadius: 20, marginBottom: 12, border: '1px solid #f0f0f0', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
+                                <div key={u.id} className="g-card" style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 18, background: 'rgba(255,255,255,0.4)', borderRadius: 20, marginBottom: 12, border: '1px solid #EFECE5', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
                                     <div style={{ fontSize: 14, fontWeight: 'bold', color: '#aaa', width: 20 }}>{index + 4}</div>
                                     <div className="g-avatar" style={{ width: 45, height: 45, borderRadius: 25, background: '#2d3436', color: 'white', display: 'grid', placeItems: 'center', fontWeight: 'bold' }}>{u.alias?.[0]?.toUpperCase()}</div>
                                     <div style={{ flex: 1 }}><h4 style={{ margin: 0, fontSize: '1rem' }}>{u.alias}</h4><p style={{ margin: 0, fontSize: 13, color: '#888', marginTop: 2 }}>{photos.filter(p => p.userId === u.id).length} {t('photosShort')}</p></div>
@@ -247,9 +271,11 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
 
                 {activeTab === 'profile' && (
                     <div style={{ padding: 0 }}>
-                        <div style={{ padding: '50px 20px', textAlign: 'center', background: '#fcfcfc', borderBottom: '1px solid #f0f0f0' }}>
-                            <div style={{ width: 90, height: 90, borderRadius: 45, background: '#2d3436', color: 'white', display: 'grid', placeItems: 'center', fontSize: 35, margin: '0 auto 20px', fontFamily: 'serif', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>{alias?.[0].toUpperCase()}</div>
-                            <h1 className="serif" style={{ margin: 0, fontSize: '1.8rem' }}>{alias}</h1>
+                        <div style={{ padding: '50px 20px', textAlign: 'center', background: '#F8F7F2', borderBottom: '1px solid #EFECE5' }}>
+                            <div style={{ width: 90, height: 90, borderRadius: 45, background: '#2d3436', color: 'white', display: 'grid', placeItems: 'center', fontSize: 35, margin: '0 auto 20px', fontFamily: 'serif', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                                {eventAlias?.[0].toUpperCase() || 'U'}
+                            </div>
+                            <h1 className="serif" style={{ margin: 0, fontSize: '1.8rem' }}>{eventAlias}</h1>
                             <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
                                 <div style={{ display: 'flex', gap: 30 }}>
                                     <div style={{ textAlign: 'center' }}>

@@ -4,16 +4,25 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 
-export default function GuestAccess() {
+export default function GuestAccess({ eventId }: { eventId: string }) {
   const { setAlias } = useAuth();
   const { t } = useLanguage();
   const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
-      setAlias(name.trim());
+    if (name.trim() && !loading) {
+      setLoading(true);
+      try {
+        await setAlias(name.trim(), eventId);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -34,9 +43,10 @@ export default function GuestAccess() {
             placeholder={t('namePlaceholder')}
             autoFocus
             required
+            disabled={loading}
           />
-          <button type="submit" className="premium-btn">
-            {t('start')}
+          <button type="submit" className="premium-btn" disabled={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            {loading ? <Loader2 className="animate-spin" size={20} /> : t('start')}
           </button>
         </form>
       </div>
@@ -48,7 +58,7 @@ export default function GuestAccess() {
           align-items: center;
           justify-content: center;
           padding: 20px;
-          background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+          background: #F8F7F2;
         }
         .content {
           padding: 40px 30px;
