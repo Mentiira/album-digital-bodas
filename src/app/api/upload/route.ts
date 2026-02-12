@@ -30,8 +30,8 @@ const s3 = new S3Client({
 });
 
 const LIMITS = {
-    photo: 2000,
-    video: 200
+    photo: 4000,
+    video: 300
 };
 
 export async function POST(req: NextRequest) {
