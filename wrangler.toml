@@ -1,0 +1,11 @@
+name = "album-digital-bodas"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[build]
+command = "npm run build"
+path = ".vercel/output/static"
+
+[vars]
+# Las variables de entorno también se pueden poner aquí, 
+# pero es mejor dejarlas en el panel de Cloudflare por seguridad.
