@@ -20,114 +20,126 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [uploadSource, setUploadSource] = useState<'camera' | 'gallery' | null>(null);
+    const [currentFileIndex, setCurrentFileIndex] = useState(0);
+    const [totalFiles, setTotalFiles] = useState(0);
 
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, source: 'camera' | 'gallery') => {
-        const file = e.target.files?.[0];
-        if (!file || !user) return;
+        const files = e.target.files;
+        if (!files || files.length === 0 || !user) return;
 
         setUploading(true);
         setUploadSource(source);
-        setProgress(0);
-        const isVideo = file.type.startsWith('video/');
+        setTotalFiles(files.length);
+        setCurrentFileIndex(0);
 
         try {
-            let fileToUpload = file;
-            let contentType = file.type;
-            let extension = isVideo ? (file.name.split('.').pop() || 'mp4') : 'webp';
+            // Iteramos sobre cada archivo seleccionado
+            for (let i = 0; i < files.length; i++) {
+                setCurrentFileIndex(i + 1); // Empezamos en 1 para la UI (1/5)
+                setProgress(0);
 
-            if (!isVideo) {
-                const options = {
-                    maxSizeMB: 1,
-                    maxWidthOrHeight: 2048,
-                    useWebWorker: true,
-                    fileType: 'image/webp'
-                };
-                setProgress(10); // Simular inicio de compresión
-                try {
-                    fileToUpload = (await imageCompression(file, options)) as File;
-                    contentType = 'image/webp';
-                    extension = 'webp';
-                } catch (err) {
-                    console.error("Compression failed, using original", err);
-                }
-            }
+                const file = files[i];
+                const isVideo = file.type.startsWith('video/');
+                let fileToUpload = file;
+                let contentType = file.type;
+                let extension = isVideo ? (file.name.split('.').pop() || 'mp4') : 'webp';
 
-            // 1. Obtener URL firmada
-            const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filename: `${Date.now()}-${file.name.replace(/\.[^/.]+$/, "")}.${extension}`,
-                    contentType: contentType,
-                    eventId,
-                    type: isVideo ? 'video' : 'photo'
-                })
-            });
-
-            if (!res.ok) {
-                const contentType = res.headers.get('content-type');
-                let errorMessage = 'Error en el servidor';
-
-                if (contentType && contentType.includes('application/json')) {
-                    const errData = await res.json();
-                    errorMessage = errData.message || errorMessage;
-                } else {
-                    const textError = await res.text();
-                    console.error('HTML/Text Error from Server:', textError);
-                }
-
-                toast.error(errorMessage);
-                return;
-            }
-
-            const { url, key } = await res.json();
-
-            // 2. Subida con XMLHttpRequest para tener PROGRESO REAL
-            await new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('PUT', url);
-                xhr.setRequestHeader('Content-Type', contentType);
-
-                xhr.upload.onprogress = (event) => {
-                    if (event.lengthComputable) {
-                        const percentComplete = Math.round((event.loaded / event.total) * 90);
-                        setProgress(10 + percentComplete);
+                if (!isVideo) {
+                    const options = {
+                        maxSizeMB: 1,
+                        maxWidthOrHeight: 2048,
+                        useWebWorker: true,
+                        fileType: 'image/webp'
+                    };
+                    setProgress(10);
+                    try {
+                        // Importación corregida para SSR seguro - aunque browser-image-compression se importó arriba,
+                        // para consistencia y seguridad en algunos entornos lo cargamos asíncronamente si falla el tree-shaking
+                        // Pero dado que ya tenemos el import arriba y estamos en client component, podemos usarlo directo,
+                        // manteniendo el catch por si acaso.
+                        // Para evitar el error de "document is not defined" que a veces ocurre con esta librería incluso en cliente al hidratar:
+                        const imageCompressionLib = (await import('browser-image-compression')).default;
+                        fileToUpload = (await imageCompressionLib(file, options)) as File;
+                        contentType = 'image/webp';
+                        extension = 'webp';
+                    } catch (err) {
+                        console.error("Compression failed, using original", err);
                     }
-                };
+                }
 
-                xhr.onload = () => {
-                    if (xhr.status === 200) resolve(xhr.response);
-                    else reject(new Error('Upload failed'));
-                };
+                // 1. Obtener URL firmada
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: `${Date.now()}-${file.name.replace(/\.[^/.]+$/, "")}.${extension}`,
+                        contentType: contentType,
+                        eventId,
+                        type: isVideo ? 'video' : 'photo'
+                    })
+                });
 
-                xhr.onerror = () => reject(new Error('Network error'));
-                xhr.send(fileToUpload);
-            });
+                if (!res.ok) {
+                    const contentType = res.headers.get('content-type');
+                    let errorMessage = 'Error en el servidor';
+                    if (contentType && contentType.includes('application/json')) {
+                        const errData = await res.json();
+                        errorMessage = errData.message || errorMessage;
+                    }
+                    toast.error(`Error con archivo ${i + 1}: ${errorMessage}`);
+                    continue; // Intentamos con el siguiente archivo
+                }
 
-            // 3. Registro en Firestore
-            const batch = writeBatch(db);
-            const contentRef = doc(collection(db, `events/${eventId}/photos`));
+                const { url, key } = await res.json();
 
-            batch.set(contentRef, {
-                url: `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`,
-                key,
-                userId: user.uid,
-                userName: alias,
-                createdAt: serverTimestamp(),
-                type: isVideo ? 'video' : 'photo'
-            });
+                // 2. Subida con XMLHttpRequest para tener PROGRESO REAL
+                await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('PUT', url);
+                    xhr.setRequestHeader('Content-Type', contentType);
 
-            const eventRef = doc(db, 'events', eventId);
-            batch.set(eventRef, {
-                [isVideo ? 'videoCount' : 'photoCount']: increment(1)
-            }, { merge: true });
+                    xhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) {
+                            const percentComplete = Math.round((event.loaded / event.total) * 90);
+                            setProgress(10 + percentComplete);
+                        }
+                    };
 
-            await batch.commit();
-            setProgress(100);
-            toast.success(t('uploadSuccess'));
+                    xhr.onload = () => {
+                        if (xhr.status === 200) resolve(xhr.response);
+                        else reject(new Error('Upload failed'));
+                    };
+
+                    xhr.onerror = () => reject(new Error('Network error'));
+                    xhr.send(fileToUpload);
+                });
+
+                // 3. Registro en Firestore
+                const batch = writeBatch(db);
+                const contentRef = doc(collection(db, `events/${eventId}/photos`));
+
+                batch.set(contentRef, {
+                    url: `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`,
+                    key,
+                    userId: user.uid,
+                    userName: alias,
+                    createdAt: serverTimestamp(),
+                    type: isVideo ? 'video' : 'photo'
+                });
+
+                const eventRef = doc(db, 'events', eventId);
+                batch.set(eventRef, {
+                    [isVideo ? 'videoCount' : 'photoCount']: increment(1)
+                }, { merge: true });
+
+                await batch.commit();
+                setProgress(100);
+            }
+
+            toast.success(t('uploadSuccess')); // Mensaje final global
         } catch (error) {
             console.error(error);
             toast.error(t('errorUpload'));
@@ -136,6 +148,7 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
                 setUploading(false);
                 setUploadSource(null);
                 setProgress(0);
+                setCurrentFileIndex(0);
             }, 500);
             if (cameraInputRef.current) cameraInputRef.current.value = '';
             if (galleryInputRef.current) galleryInputRef.current.value = '';
@@ -155,9 +168,11 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
                 ref={cameraInputRef}
                 onChange={(e) => handleUpload(e, 'camera')}
             />
+            {/* AÑADIDO: Atributo 'multiple' en la galería */}
             <input
                 type="file"
                 accept="image/*,video/*"
+                multiple
                 hidden
                 ref={galleryInputRef}
                 onChange={(e) => handleUpload(e, 'gallery')}
@@ -167,7 +182,10 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
             {!isVisible && uploading && (
                 <div className="upload-indicator-mini shadow-lg">
                     <Loader2 className="animate-spin" size={16} />
-                    <span>{progress}%</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
+                        <span style={{ fontSize: 10, fontWeight: 'bold' }}>{progress}%</span>
+                        <span style={{ fontSize: 8, opacity: 0.8 }}>File {currentFileIndex}/{totalFiles}</span>
+                    </div>
                 </div>
             )}
 
@@ -181,7 +199,10 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
                         disabled={uploading}
                     >
                         {uploading && uploadSource === 'gallery' ? (
-                            <div className="progress-circle">{progress}%</div>
+                            <div className="progress-circle" style={{ flexDirection: 'column', lineHeight: 1 }}>
+                                <span>{progress}%</span>
+                                <span style={{ fontSize: 7, marginTop: 2 }}>{currentFileIndex}/{totalFiles}</span>
+                            </div>
                         ) : (
                             <Upload size={28} />
                         )}
