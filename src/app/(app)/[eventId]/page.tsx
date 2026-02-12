@@ -239,12 +239,16 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                                                 playsInline
                                                 preload="metadata"
                                             />
-                                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.1)', display: 'grid', placeItems: 'center' }}>
-                                                <Play fill="white" size={24} />
+                                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)', display: 'grid', placeItems: 'center' }}>
+                                                <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
+                                                    <Play fill="white" color="white" size={18} strokeWidth={1.5} style={{ marginLeft: 3 }} />
+                                                </div>
                                             </div>
                                         </>
                                     )}
-                                    <div style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.3)', color: 'white', padding: '2px 8px', borderRadius: 8, fontSize: 10, zIndex: 2 }}>{p.userName}</div>
+                                    <div style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', color: 'white', padding: '2px 8px', borderRadius: 8, fontSize: 10, zIndex: 2, fontWeight: 'bold' }}>
+                                        {p.userName || 'Invitado'}
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -340,10 +344,8 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                 )}
             </div>
 
-            {/* 5. SUBIDA (FAB) */}
-            {(activeTab === 'home' || activeTab === 'profile') && (
-                <UploadFab eventId={params.eventId} />
-            )}
+            {/* 5. SUBIDA (FAB) - Fuera para persistencia de carga entre pestañas */}
+            <UploadFab eventId={params.eventId} activeTab={activeTab} />
 
             {/* 6. MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
             {showDeleteModal && (

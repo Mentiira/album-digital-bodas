@@ -9,9 +9,14 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { toast } from 'sonner';
 
-export default function UploadFab({ eventId }: { eventId: string }) {
-    const { user, alias } = useAuth();
+export default function UploadFab({ eventId, activeTab }: { eventId: string, activeTab: string }) {
+    const { user, alias: contextAlias } = useAuth();
     const { t } = useLanguage();
+
+    // BACKEND SÓLIDO: Si el alias del contexto no ha cargado, intentamos sacarlo de localStorage directamente
+    // Esto previene que el autor aparezca como "Invitado" si el usuario sube algo justo después de recargar.
+    const alias = contextAlias || (typeof window !== 'undefined' ? localStorage.getItem(`userAlias_${eventId}`) : null);
+
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [uploadSource, setUploadSource] = useState<'camera' | 'gallery' | null>(null);
@@ -137,9 +142,11 @@ export default function UploadFab({ eventId }: { eventId: string }) {
         }
     };
 
+    const isVisible = activeTab === 'home' || activeTab === 'profile';
+
     return (
         <div className="upload-fab-group">
-            {/* Input para CÁMARA (Forzado por capture) */}
+            {/* Inputs invisibles siempre presentes */}
             <input
                 type="file"
                 accept="image/*"
@@ -148,7 +155,6 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                 ref={cameraInputRef}
                 onChange={(e) => handleUpload(e, 'camera')}
             />
-            {/* Input para GALERÍA (Imágenes y Videos) */}
             <input
                 type="file"
                 accept="image/*,video/*"
@@ -157,36 +163,47 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                 onChange={(e) => handleUpload(e, 'gallery')}
             />
 
-            <div className="fab-container">
-                <button
-                    className="fab-mini shadow"
-                    title="Subir desde galería"
-                    onClick={() => galleryInputRef.current?.click()}
-                    disabled={uploading}
-                >
-                    {uploading && uploadSource === 'gallery' ? (
-                        <div className="progress-circle">{progress}%</div>
-                    ) : (
-                        <Upload size={28} />
-                    )}
-                </button>
+            {/* Indicador de progreso flotante cuando estamos en Chat o Guests */}
+            {!isVisible && uploading && (
+                <div className="upload-indicator-mini shadow-lg">
+                    <Loader2 className="animate-spin" size={16} />
+                    <span>{progress}%</span>
+                </div>
+            )}
 
-                <button
-                    className="fab-main premium-shadow"
-                    title="Usar cámara"
-                    onClick={() => cameraInputRef.current?.click()}
-                    disabled={uploading}
-                >
-                    {uploading && uploadSource === 'camera' ? (
-                        <div className="progress-circle main-loader">
-                            <Loader2 className="animate-spin" size={24} />
-                            <span style={{ fontSize: 10, fontWeight: 'bold' }}>{progress}%</span>
-                        </div>
-                    ) : (
-                        <Camera size={28} />
-                    )}
-                </button>
-            </div>
+            {/* Los botones reales solo se ven en Album y Perfil */}
+            {isVisible && (
+                <div className="fab-container">
+                    <button
+                        className="fab-mini shadow"
+                        title="Subir desde galería"
+                        onClick={() => galleryInputRef.current?.click()}
+                        disabled={uploading}
+                    >
+                        {uploading && uploadSource === 'gallery' ? (
+                            <div className="progress-circle">{progress}%</div>
+                        ) : (
+                            <Upload size={28} />
+                        )}
+                    </button>
+
+                    <button
+                        className="fab-main premium-shadow"
+                        title="Usar cámara"
+                        onClick={() => cameraInputRef.current?.click()}
+                        disabled={uploading}
+                    >
+                        {uploading && uploadSource === 'camera' ? (
+                            <div className="progress-circle main-loader">
+                                <Loader2 className="animate-spin" size={24} />
+                                <span style={{ fontSize: 10, fontWeight: 'bold' }}>{progress}%</span>
+                            </div>
+                        ) : (
+                            <Camera size={28} />
+                        )}
+                    </button>
+                </div>
+            )}
 
             <style jsx>{`
         .upload-fab-group {
@@ -226,6 +243,28 @@ export default function UploadFab({ eventId }: { eventId: string }) {
           justify-content: center;
           cursor: pointer;
           box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        .upload-indicator-mini {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: rgba(45, 52, 54, 0.9);
+          backdrop-filter: blur(10px);
+          color: white;
+          padding: 8px 16px;
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 700;
+          z-index: 3000;
+          border: 1px solid rgba(255,255,255,0.1);
+          animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+          from { transform: translateX(50px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
         .progress-circle {
           font-size: 11px;
