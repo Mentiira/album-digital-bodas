@@ -4,6 +4,8 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from 'sonner';
 
+export const runtime = 'edge';
+
 export const metadata: Metadata = {
   title: "Digital Wedding Album",
   description: "Collaborative wedding album for guests",
