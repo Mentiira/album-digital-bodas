@@ -85,6 +85,16 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
 
             const { url, key } = await res.json();
 
+            // --- EXPERIMENTAL: Wake Lock para evitar que el móvil se duerma ---
+            let wakeLock: any = null;
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await (navigator as any).wakeLock.request('screen');
+                } catch (err) {
+                    console.warn("Wake Lock failed:", err);
+                }
+            }
+
             // 2. Subida con XMLHttpRequest para tener PROGRESO REAL
             await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
@@ -93,7 +103,7 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
 
                 xhr.upload.onprogress = (event) => {
                     if (event.lengthComputable) {
-                        const percentComplete = Math.round((event.loaded / event.total) * 90); // Reservamos 10% para Firestore
+                        const percentComplete = Math.round((event.loaded / event.total) * 90);
                         setProgress(10 + percentComplete);
                     }
                 };
@@ -106,6 +116,9 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
                 xhr.onerror = () => reject(new Error('Network error'));
                 xhr.send(fileToUpload);
             });
+
+            // Liberar Wake Lock si se obtuvo
+            if (wakeLock) await wakeLock.release();
 
             // 3. Registro en Firestore
             const batch = writeBatch(db);
