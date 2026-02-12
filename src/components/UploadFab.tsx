@@ -63,8 +63,18 @@ export default function UploadFab({ eventId }: { eventId: string }) {
             });
 
             if (!res.ok) {
-                const errData = await res.json();
-                toast.error(errData.message || 'Error en el servidor');
+                const contentType = res.headers.get('content-type');
+                let errorMessage = 'Error en el servidor';
+
+                if (contentType && contentType.includes('application/json')) {
+                    const errData = await res.json();
+                    errorMessage = errData.message || errorMessage;
+                } else {
+                    const textError = await res.text();
+                    console.error('HTML/Text Error from Server:', textError);
+                }
+
+                toast.error(errorMessage);
                 return;
             }
 
