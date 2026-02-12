@@ -1,8 +1,7 @@
-export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { db } from '@/lib/firebase';
+import { dbEdge } from '@/lib/firebase-edge';
 import { doc, getDoc } from 'firebase/firestore/lite';
 
 const R2_ENDPOINT = process.env.R2_ENDPOINT;
@@ -43,7 +42,7 @@ export async function POST(req: NextRequest) {
         }
 
         // --- SEGURIDAD: Verificar límites en Firestore ---
-        const eventRef = doc(db, 'events', eventId);
+        const eventRef = doc(dbEdge, 'events', eventId);
         const eventSnap = await getDoc(eventRef);
 
         if (eventSnap.exists()) {

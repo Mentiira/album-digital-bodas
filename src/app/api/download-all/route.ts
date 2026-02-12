@@ -1,6 +1,5 @@
-export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { dbEdge } from '@/lib/firebase-edge';
 import { collection, getDocs } from 'firebase/firestore/lite';
 import JSZip from 'jszip';
 
@@ -14,7 +13,7 @@ export async function GET(req: NextRequest) {
 
     try {
         // 1. Obtener todas las fotos/videos del evento desde Firestore
-        const photosRef = collection(db, `events/${eventId}/photos`);
+        const photosRef = collection(dbEdge, `events/${eventId}/photos`);
         const snapshot = await getDocs(photosRef);
         const files = snapshot.docs.map(doc => doc.data());
 
