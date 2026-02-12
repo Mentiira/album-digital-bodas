@@ -13,15 +13,19 @@ export default function UploadFab({ eventId }: { eventId: string }) {
     const { user, alias } = useAuth();
     const { t } = useLanguage();
     const [uploading, setUploading] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [uploadSource, setUploadSource] = useState<'camera' | 'gallery' | null>(null);
 
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, source: 'camera' | 'gallery') => {
         const file = e.target.files?.[0];
         if (!file || !user) return;
 
         setUploading(true);
+        setUploadSource(source);
+        setProgress(0);
         const isVideo = file.type.startsWith('video/');
 
         try {
@@ -36,6 +40,7 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                     useWebWorker: true,
                     fileType: 'image/webp'
                 };
+                setProgress(10); // Simular inicio de compresión
                 try {
                     fileToUpload = (await imageCompression(file, options)) as File;
                     contentType = 'image/webp';
@@ -45,6 +50,7 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                 }
             }
 
+            // 1. Obtener URL firmada
             const res = await fetch('/api/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -64,12 +70,29 @@ export default function UploadFab({ eventId }: { eventId: string }) {
 
             const { url, key } = await res.json();
 
-            await fetch(url, {
-                method: 'PUT',
-                body: fileToUpload,
-                headers: { 'Content-Type': contentType }
+            // 2. Subida con XMLHttpRequest para tener PROGRESO REAL
+            await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', url);
+                xhr.setRequestHeader('Content-Type', contentType);
+
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const percentComplete = Math.round((event.loaded / event.total) * 90); // Reservamos 10% para Firestore
+                        setProgress(10 + percentComplete);
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status === 200) resolve(xhr.response);
+                    else reject(new Error('Upload failed'));
+                };
+
+                xhr.onerror = () => reject(new Error('Network error'));
+                xhr.send(fileToUpload);
             });
 
+            // 3. Registro en Firestore
             const batch = writeBatch(db);
             const contentRef = doc(collection(db, `events/${eventId}/photos`));
 
@@ -88,12 +111,17 @@ export default function UploadFab({ eventId }: { eventId: string }) {
             }, { merge: true });
 
             await batch.commit();
+            setProgress(100);
             toast.success(t('uploadSuccess'));
         } catch (error) {
             console.error(error);
             toast.error(t('errorUpload'));
         } finally {
-            setUploading(false);
+            setTimeout(() => {
+                setUploading(false);
+                setUploadSource(null);
+                setProgress(0);
+            }, 500);
             if (cameraInputRef.current) cameraInputRef.current.value = '';
             if (galleryInputRef.current) galleryInputRef.current.value = '';
         }
@@ -108,7 +136,7 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                 capture="environment"
                 hidden
                 ref={cameraInputRef}
-                onChange={handleUpload}
+                onChange={(e) => handleUpload(e, 'camera')}
             />
             {/* Input para GALERÍA (Imágenes y Videos) */}
             <input
@@ -116,7 +144,7 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                 accept="image/*,video/*"
                 hidden
                 ref={galleryInputRef}
-                onChange={handleUpload}
+                onChange={(e) => handleUpload(e, 'gallery')}
             />
 
             <div className="fab-container">
@@ -126,7 +154,11 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                     onClick={() => galleryInputRef.current?.click()}
                     disabled={uploading}
                 >
-                    <Upload size={28} />
+                    {uploading && uploadSource === 'gallery' ? (
+                        <div className="progress-circle">{progress}%</div>
+                    ) : (
+                        <Upload size={28} />
+                    )}
                 </button>
 
                 <button
@@ -135,7 +167,14 @@ export default function UploadFab({ eventId }: { eventId: string }) {
                     onClick={() => cameraInputRef.current?.click()}
                     disabled={uploading}
                 >
-                    {uploading ? <Loader2 className="animate-spin" /> : <Camera size={28} />}
+                    {uploading && uploadSource === 'camera' ? (
+                        <div className="progress-circle main-loader">
+                            <Loader2 className="animate-spin" size={24} />
+                            <span style={{ fontSize: 10, fontWeight: 'bold' }}>{progress}%</span>
+                        </div>
+                    ) : (
+                        <Camera size={28} />
+                    )}
                 </button>
             </div>
 
@@ -177,6 +216,17 @@ export default function UploadFab({ eventId }: { eventId: string }) {
           justify-content: center;
           cursor: pointer;
           box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        .progress-circle {
+          font-size: 11px;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .main-loader {
+          flex-direction: column;
+          gap: 2px;
         }
         .animate-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

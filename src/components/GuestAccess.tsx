@@ -12,6 +12,10 @@ export default function GuestAccess({ eventId }: { eventId: string }) {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
+  React.useEffect(() => {
+    document.body.classList.add('loaded');
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && !loading) {

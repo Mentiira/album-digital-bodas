@@ -9,7 +9,7 @@ import UploadFab from '@/components/UploadFab';
 import ChatView from '@/components/ChatView';
 import { db } from '@/lib/firebase';
 import { doc, deleteDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { Image as ImageIcon, MessageSquare, Calendar, Users, User, X, Download, Play, ChevronLeft, Bell, Trophy, Crown, Plus, Trash2, Loader2, Archive } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, Calendar, Users, User, X, Download, Play, ChevronLeft, Bell, Trophy, Crown, Plus, Trash2, Loader2, Archive, AlertCircle } from 'lucide-react';
 import { use } from 'react';
 import { toast } from 'sonner';
 
@@ -26,12 +26,19 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
     const [selected, setSelected] = useState<any | null>(null);
     const [visibleCount, setVisibleCount] = useState(12);
     const [deleting, setDeleting] = useState(false);
+
+    React.useEffect(() => {
+        // Asegurar que el cargador inicial desaparezca al montar el acceso
+        document.body.classList.add('loaded');
+    }, []);
     const [downloadingZip, setDownloadingZip] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [eventData, setEventData] = useState<any>(null);
     const [eventLoading, setEventLoading] = useState(true);
 
     useEffect(() => {
+        // Asegurar que el cargador inicial desaparezca al montar la página
+        document.body.classList.add('loaded');
         if (!params.eventId || !user) return;
 
         // La validación del alias ahora es reactiva en el render
@@ -112,8 +119,16 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
         }
     };
 
-    if (loading || eventLoading) return <div className="loading-screen">Cargando...</div>;
-    if (!eventData) return <div className="loading-screen"><h3>Evento no encontrado</h3><p>Por favor verifica el link.</p></div>;
+    if (loading || eventLoading) return null;
+    if (!eventData) return (
+        <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8F7F2', textAlign: 'center', padding: 20 }}>
+            <div>
+                <AlertCircle size={48} color="#B8860B" style={{ marginBottom: 20 }} />
+                <h2 className="serif">{t('weddingOf') === 'Boda de' ? 'Evento no encontrado' : 'Event not found'}</h2>
+                <p style={{ opacity: 0.6 }}>Por favor verifica el link.</p>
+            </div>
+        </div>
+    );
 
     // Alias reactivo: buscamos en el estado global o en el almacenamiento local de este evento
     const eventAlias = alias || (typeof window !== 'undefined' ? localStorage.getItem(`userAlias_${params.eventId}`) : null);
