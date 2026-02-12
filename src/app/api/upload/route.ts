@@ -5,12 +5,27 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
+const R2_ENDPOINT = process.env.R2_ENDPOINT;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME;
+
+// Validación preventiva para debug
+if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME) {
+    console.error('CRITICAL ERROR: Missing R2 environment variables:', {
+        endpoint: !!R2_ENDPOINT,
+        keyId: !!R2_ACCESS_KEY_ID,
+        secret: !!R2_SECRET_ACCESS_KEY,
+        bucket: !!R2_BUCKET_NAME
+    });
+}
+
 const s3 = new S3Client({
     region: 'auto',
-    endpoint: process.env.R2_ENDPOINT,
+    endpoint: R2_ENDPOINT || '',
     credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+        accessKeyId: R2_ACCESS_KEY_ID || '',
+        secretAccessKey: R2_SECRET_ACCESS_KEY || '',
     },
 });
 
@@ -47,7 +62,7 @@ export async function POST(req: NextRequest) {
         const key = `events/${eventId}/photos/${Date.now()}-${filename}`;
 
         const command = new PutObjectCommand({
-            Bucket: process.env.R2_BUCKET_NAME,
+            Bucket: R2_BUCKET_NAME,
             Key: key,
             ContentType: contentType,
         });
