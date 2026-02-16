@@ -43,6 +43,30 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
 
                 const file = files[i];
                 const isVideo = file.type.startsWith('video/');
+
+                // --- VALIDACIÓN DE DURACIÓN DE VIDEO (30s) ---
+                if (isVideo) {
+                    try {
+                        const duration = await new Promise<number>((resolve, reject) => {
+                            const video = document.createElement('video');
+                            video.preload = 'metadata';
+                            video.onloadedmetadata = () => {
+                                window.URL.revokeObjectURL(video.src);
+                                resolve(video.duration);
+                            };
+                            video.onerror = () => reject('Error loading video metadata');
+                            video.src = URL.createObjectURL(file);
+                        });
+
+                        if (duration > 31) { // 31 para dar un pequeño margen de error
+                            toast.error(`${file.name}: ${t('videoTooLong')}`);
+                            continue; // Saltamos a la siguiente foto/video
+                        }
+                    } catch (err) {
+                        console.error("Duration check failed", err);
+                    }
+                }
+
                 let fileToUpload = file;
                 let contentType = file.type;
                 let extension = isVideo ? (file.name.split('.').pop() || 'mp4') : 'webp';

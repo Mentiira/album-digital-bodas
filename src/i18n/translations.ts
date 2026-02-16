@@ -47,6 +47,7 @@ export const translations = {
     ceremonyVenue: "Iglesia Santa Maria",
     receptionVenue: "Jardín de Eventos",
     dinnerVenue: "Salón Principal",
+    videoTooLong: "Video demasiado largo (máx. 30s)",
   },
   en: {
     eventTitle: "Wedding of Mayra and Alberto",
@@ -96,6 +97,7 @@ export const translations = {
     ceremonyVenue: "St. Mary's Church",
     receptionVenue: "Event Garden",
     dinnerVenue: "Grand Hall",
+    videoTooLong: "Video too long (max. 30s)",
   }
 };
 

@@ -226,7 +226,12 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
             <div className="tab-content" style={{ background: '#F8F7F2', minHeight: '65vh' }}>
                 {activeTab === 'home' && (
                     <div style={{ padding: 15 }}>
-                        <h3 className="serif" style={{ marginBottom: 20, textAlign: 'center', fontSize: '1.5rem' }}>{t('liveGallery')}</h3>
+                        <h3 className="serif" style={{ marginBottom: 5, textAlign: 'center', fontSize: '1.5rem' }}>{t('liveGallery')}</h3>
+                        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                            <span style={{ fontSize: 13, color: '#888', background: 'rgba(0,0,0,0.03)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(0,0,0,0.05)', fontWeight: '500' }}>
+                                {photos.length} {t('totalPhotos')}
+                            </span>
+                        </div>
                         <div className="photo-grid">
                             {photos.slice(0, visibleCount).map(p => (
                                 <div key={p.id} onClick={() => setSelected(p)} className={p.type === 'video' ? 'vid-card' : 'photo-card'} style={p.type === 'video' ? {} : { backgroundImage: `url(${p.url})` }}>
