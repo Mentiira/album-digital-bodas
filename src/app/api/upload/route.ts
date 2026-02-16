@@ -29,10 +29,6 @@ const s3 = new S3Client({
     },
 });
 
-const LIMITS = {
-    photo: 4000,
-    video: 300
-};
 
 export async function POST(req: NextRequest) {
     try {
@@ -49,7 +45,10 @@ export async function POST(req: NextRequest) {
         if (eventSnap.exists()) {
             const data = eventSnap.data();
             const currentCount = type === 'video' ? (data.videoCount || 0) : (data.photoCount || 0);
-            const maxLimit = type === 'video' ? LIMITS.video : LIMITS.photo;
+
+            // LÓGICA DINÁMICA: Usa el límite de Firestore si existe, de lo contrario usa el default.
+            const defaultLimit = type === 'video' ? 300 : 5000;
+            const maxLimit = type === 'video' ? (data.maxVideos || defaultLimit) : (data.maxPhotos || defaultLimit);
 
             if (currentCount >= maxLimit) {
                 return NextResponse.json({
