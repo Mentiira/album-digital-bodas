@@ -240,13 +240,13 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                                                 preload="metadata"
                                             />
                                             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)', display: 'grid', placeItems: 'center' }}>
-                                                <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
-                                                    <Play fill="white" color="white" size={14} strokeWidth={1.5} style={{ marginLeft: 2 }} />
+                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
+                                                    <Play fill="white" color="white" size={16} strokeWidth={1.5} style={{ marginLeft: 2 }} />
                                                 </div>
                                             </div>
                                         </>
                                     )}
-                                    <div style={{ position: 'absolute', bottom: 3, left: 3, right: 3, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', color: 'white', padding: '1px 4px', borderRadius: 4, fontSize: 8, zIndex: 2, fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <div style={{ position: 'absolute', bottom: 3, left: 3, right: 3, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', color: 'white', padding: '1px 4px', borderRadius: 4, fontSize: 9, zIndex: 2, fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {p.userName || 'Invitado'}
                                     </div>
                                 </div>
