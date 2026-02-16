@@ -121,16 +121,16 @@ body {
 /* GRID FIX */
 .photo-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  padding: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 8px;
 }
 
 .photo-card {
   aspect-ratio: 1;
   background-size: cover;
   background-position: center;
-  border-radius: 20px;
+  border-radius: 12px;
   background-color: #f8f9fa;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
   position: relative;
@@ -141,7 +141,7 @@ body {
   aspect-ratio: 1;
   position: relative;
   background: #000;
-  border-radius: 20px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   overflow: hidden;
