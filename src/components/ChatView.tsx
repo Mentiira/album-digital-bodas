@@ -9,8 +9,11 @@ import { Send } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function ChatView({ eventId }: { eventId: string }) {
-    const { user, alias } = useAuth();
+    const { user, alias: contextAlias } = useAuth();
     const { t } = useLanguage();
+
+    // REFUERZO: Si el alias del contexto está vacío (ej. al recargar), lo buscamos en el localStorage de este evento
+    const alias = contextAlias || (typeof window !== 'undefined' ? localStorage.getItem(`userAlias_${eventId}`) : '');
     const [messages, setMessages] = useState<any[]>([]);
     const [text, setText] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);

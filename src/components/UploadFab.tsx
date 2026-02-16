@@ -13,9 +13,9 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
     const { user, alias: contextAlias } = useAuth();
     const { t } = useLanguage();
 
-    // BACKEND SÓLIDO: Si el alias del contexto no ha cargado, intentamos sacarlo de localStorage directamente
+    // REFUERZO: Si el alias del contexto está vacío (ej. al recargar), lo buscamos en el localStorage de este evento.
     // Esto previene que el autor aparezca como "Invitado" si el usuario sube algo justo después de recargar.
-    const alias = contextAlias || (typeof window !== 'undefined' ? localStorage.getItem(`userAlias_${eventId}`) : null);
+    const alias = contextAlias || (typeof window !== 'undefined' ? localStorage.getItem(`userAlias_${eventId}`) : '');
 
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -36,6 +36,8 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
         setCurrentFileIndex(0);
 
         try {
+            let uploadedCount = 0;
+
             // Iteramos sobre cada archivo seleccionado
             for (let i = 0; i < files.length; i++) {
                 setCurrentFileIndex(i + 1); // Empezamos en 1 para la UI (1/5)
@@ -94,6 +96,7 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
                     }
                 }
 
+                // ... (resto del proceso de subida)
                 // 1. Obtener URL firmada
                 const res = await fetch('/api/upload', {
                     method: 'POST',
@@ -161,9 +164,12 @@ export default function UploadFab({ eventId, activeTab }: { eventId: string, act
 
                 await batch.commit();
                 setProgress(100);
+                uploadedCount++;
             }
 
-            toast.success(t('uploadSuccess')); // Mensaje final global
+            if (uploadedCount > 0) {
+                toast.success(t('uploadSuccess')); // Solo si realmente se subió algo
+            }
         } catch (error) {
             console.error(error);
             toast.error(t('errorUpload'));
