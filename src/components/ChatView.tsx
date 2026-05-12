@@ -7,6 +7,15 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { Send } from 'lucide-react';
 import { format } from 'date-fns';
+import type { Timestamp } from 'firebase/firestore';
+
+interface ChatMessage {
+    id: string;
+    text: string;
+    userId: string;
+    userName: string;
+    createdAt?: Timestamp;
+}
 
 export default function ChatView({ eventId }: { eventId: string }) {
     const { user, alias: contextAlias } = useAuth();
@@ -14,7 +23,7 @@ export default function ChatView({ eventId }: { eventId: string }) {
 
     // REFUERZO: Si el alias del contexto está vacío (ej. al recargar), lo buscamos en el localStorage de este evento
     const alias = contextAlias || (typeof window !== 'undefined' ? localStorage.getItem(`userAlias_${eventId}`) : '');
-    const [messages, setMessages] = useState<any[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [text, setText] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -26,7 +35,10 @@ export default function ChatView({ eventId }: { eventId: string }) {
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const msgs: ChatMessage[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...(doc.data() as Omit<ChatMessage, 'id'>),
+            }));
             setMessages(msgs);
             setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         });

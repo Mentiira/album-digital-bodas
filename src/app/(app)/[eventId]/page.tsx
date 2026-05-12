@@ -11,11 +11,39 @@ import UploadFab from '@/components/UploadFab';
 import ChatView from '@/components/ChatView';
 import { db } from '@/lib/firebase';
 import { doc, deleteDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { Image as ImageIcon, MessageSquare, Calendar, Users, User, X, Download, Play, ChevronLeft, Bell, Trophy, Crown, Plus, Trash2, Loader2, Archive, AlertCircle } from 'lucide-react';
+import { Image as ImageIcon, MessageSquare, Users, User, X, Download, Play, Bell, Trophy, Crown, Plus, Trash2, Loader2, Archive, AlertCircle } from 'lucide-react';
 import { use } from 'react';
 import { toast } from 'sonner';
 
 type Tab = 'home' | 'chat' | 'guests' | 'profile';
+
+interface PhotoItem {
+    id: string;
+    url: string;
+    key?: string;
+    userId: string;
+    userName?: string;
+    createdAt?: unknown;
+    type: 'photo' | 'video';
+}
+
+interface GuestItem {
+    id: string;
+    uid?: string;
+    alias?: string;
+    role?: string;
+    updatedAt?: unknown;
+}
+
+interface EventData {
+    title?: string;
+    date?: string;
+    coverImage?: string;
+    photoCount?: number;
+    videoCount?: number;
+    maxPhotos?: number;
+    maxVideos?: number;
+}
 
 export default function EventPage({ params: paramsPromise }: { params: Promise<{ eventId: string }> }) {
     const params = use(paramsPromise);
@@ -23,9 +51,9 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
     const { t } = useLanguage();
 
     const [activeTab, setActiveTab] = useState<Tab>('home');
-    const [photos, setPhotos] = useState<any[]>([]);
-    const [users, setUsers] = useState<any[]>([]);
-    const [selected, setSelected] = useState<any | null>(null);
+    const [photos, setPhotos] = useState<PhotoItem[]>([]);
+    const [users, setUsers] = useState<GuestItem[]>([]);
+    const [selected, setSelected] = useState<PhotoItem | null>(null);
     const [visibleCount, setVisibleCount] = useState(12);
     const [deleting, setDeleting] = useState(false);
 
@@ -35,7 +63,7 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
     }, []);
     const [downloadingZip, setDownloadingZip] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [eventData, setEventData] = useState<any>(null);
+    const [eventData, setEventData] = useState<EventData | null>(null);
     const [eventLoading, setEventLoading] = useState(true);
 
     useEffect(() => {
@@ -54,18 +82,23 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
         });
 
         const qPhotos = query(collection(db, `events/${params.eventId}/photos`), orderBy('createdAt', 'desc'));
-        const unsubP = onSnapshot(qPhotos, s => setPhotos(s.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubP = onSnapshot(qPhotos, s => setPhotos(s.docs.map(snapshotDoc => ({
+            id: snapshotDoc.id,
+            ...(snapshotDoc.data() as Omit<PhotoItem, 'id'>),
+        }))));
 
         // Cargar Invitados Específicos de este evento
         const qGuests = query(collection(db, `events/${params.eventId}/guests`), orderBy('updatedAt', 'desc'));
         const unsubU = onSnapshot(qGuests, s => {
-            const guestsList = s.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const guestsList: GuestItem[] = s.docs.map(snapshotDoc => ({
+                id: snapshotDoc.id,
+                ...(snapshotDoc.data() as Omit<GuestItem, 'id'>),
+            }));
             setUsers(guestsList);
 
             // Verificar si el usuario actual es ADMIN en ESTE evento
             const currentUserInEvent = guestsList.find(g => g.id === user.uid);
             if (currentUserInEvent) {
-                // @ts-ignore
                 setIsAdmin(currentUserInEvent.role === 'admin');
             } else {
                 setIsAdmin(false);
@@ -148,6 +181,10 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
 
     const top3 = sortedUsers.slice(0, 3);
     const restOfGuests = sortedUsers.slice(3, 13); // Mostrar hasta 10 invitados adicionales (del 4 al 13)
+    const defaultCoverImage = 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80';
+    const eventCoverImage = typeof eventData?.coverImage === 'string' && eventData.coverImage.trim()
+        ? eventData.coverImage.trim()
+        : defaultCoverImage;
 
     return (
         <div className="app-container">
@@ -169,6 +206,7 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                         {selected.type === 'video' ? (
                             <video src={selected.url} controls autoPlay playsInline style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 20, boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }} />
                         ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={selected.url} alt="Full view" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 20, boxShadow: '0 25px 60px rgba(0,0,0,0.15)', objectFit: 'contain' }} />
                         )}
                     </div>
@@ -180,7 +218,15 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
 
             {/* 2. HERO */}
             <div style={{ height: '35vh', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', inset: 0, background: "url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80') center/cover" }} />
+                <div
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        backgroundImage: `url("${eventCoverImage}")`,
+                        backgroundPosition: 'center',
+                        backgroundSize: 'cover',
+                    }}
+                />
                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', padding: 25 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <LanguageSelector />

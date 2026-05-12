@@ -2,9 +2,8 @@
 
 import React, { useRef, useState } from 'react';
 import { Camera, Loader2, Upload } from 'lucide-react';
-import imageCompression from 'browser-image-compression';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, writeBatch, increment } from 'firebase/firestore';
+import { collection, serverTimestamp, doc, writeBatch, increment } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { toast } from 'sonner';

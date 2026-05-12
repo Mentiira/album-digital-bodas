@@ -57,7 +57,7 @@ export default function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
     );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) {
+function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
     return (
         <div className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>
             {icon}

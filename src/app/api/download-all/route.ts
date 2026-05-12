@@ -4,6 +4,12 @@ import { dbEdge } from '@/lib/firebase-edge';
 import { collection, getDocs } from 'firebase/firestore/lite';
 import JSZip from 'jszip';
 
+interface StoredMediaFile {
+    url: string;
+    userName?: string;
+    type?: 'photo' | 'video';
+}
+
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const eventId = searchParams.get('eventId');
@@ -16,7 +22,7 @@ export async function GET(req: NextRequest) {
         // 1. Obtener todas las fotos/videos del evento desde Firestore
         const photosRef = collection(dbEdge, `events/${eventId}/photos`);
         const snapshot = await getDocs(photosRef);
-        const files = snapshot.docs.map(doc => doc.data());
+        const files = snapshot.docs.map(doc => doc.data() as StoredMediaFile);
 
         if (files.length === 0) {
             return NextResponse.json({ error: 'No files to download' }, { status: 404 });
@@ -26,7 +32,7 @@ export async function GET(req: NextRequest) {
         const zip = new JSZip();
 
         // Descargar cada archivo y añadirlo al ZIP
-        const downloadPromises = files.map(async (file: any, index: number) => {
+        const downloadPromises = files.map(async (file, index: number) => {
             try {
                 const response = await fetch(file.url);
                 if (!response.ok) return;
