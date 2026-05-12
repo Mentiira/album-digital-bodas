@@ -15,19 +15,13 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     const [language, setLanguageState] = useState<Language>('en');
 
     useEffect(() => {
-        const savedLang = localStorage.getItem('appLanguage') as Language;
-        if (savedLang && (savedLang === 'es' || savedLang === 'en')) {
-            setLanguageState(savedLang);
-        } else {
-            const browserLang = navigator.language.split('-')[0];
-            const defaultLang = browserLang === 'es' ? 'es' : 'en';
-            setLanguageState(defaultLang);
-        }
+        const browserLang = navigator.language.split('-')[0];
+        const defaultLang = browserLang === 'es' ? 'es' : 'en';
+        setLanguageState(defaultLang);
     }, []);
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
-        localStorage.setItem('appLanguage', lang);
     };
 
     const t = (key: keyof typeof translations.es) => {
