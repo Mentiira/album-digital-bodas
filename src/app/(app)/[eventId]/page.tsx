@@ -226,7 +226,7 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                         backgroundSize: 'cover',
                     }}
                 />
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', padding: 25 }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.28)', display: 'flex', flexDirection: 'column', padding: 25 }}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                         <button style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', display: 'grid', placeItems: 'center' }}><Bell size={18} /></button>
                     </div>
