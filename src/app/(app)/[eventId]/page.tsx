@@ -231,7 +231,7 @@ export default function EventPage({ params: paramsPromise }: { params: Promise<{
                         <button style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', display: 'grid', placeItems: 'center' }}><Bell size={18} /></button>
                     </div>
                     <div style={{ marginTop: 'auto', textAlign: 'center', paddingBottom: 15 }}>
-                        <h1 className="serif" style={{ margin: 0, fontSize: '2rem', color: 'white', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+                        <h1 className="serif" style={{ margin: 0, fontSize: '1.98rem', color: 'white', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
                             {eventData.title || 'Nuestra Boda'}
                         </h1>
                         <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.9)', margin: '8px 0', fontWeight: '400', letterSpacing: 1 }}>
